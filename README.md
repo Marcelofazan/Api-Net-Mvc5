@@ -1,4 +1,4 @@
-## 🚀 Net-Mvc5-Crud-Api
+## 🚀 Net-Mvc5-Api-Crud
 Exemplo de criação de API .NET MVC5 utilizando banco de dados MySQL.
 
 #### 📋 O que você vai encontrar neste projeto
