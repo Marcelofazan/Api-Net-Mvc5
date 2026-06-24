@@ -5,7 +5,6 @@ Exemplo de API em C# ASP.NET MVC5 com banco de dados MySQL.
 | Tecnologia | Descrição |
 |-----------|-----------|
 | **Dicionário de Dados** | Armazenamento de coleções de pares (chave-valor), permitindo busca e recuperação de dados |
-| **NET Framework** | Ambiente de desenvolvimento criado pela ⁠Microsoft que permite construir e rodar diversos tipos de aplicações, como sistemas web e desktop. |
 | **Swagger** | Conjunto de ferramentas para modelagem, documentação e teste de APIs RESTful |
 
 #### 💬 Requisitos do Projeto
