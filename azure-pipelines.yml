@@ -5,44 +5,48 @@ pool:
   vmImage: 'windows-latest'
 
 variables:
-  # Caminho exato do seu projeto da API
+  # Caminho do projeto da sua API
   projectPath: '**/SistemaERPOnlineAPI.csproj'
-  buildPlatform: 'AnyCPU'
+  buildPlatform: 'AnyCPU' # Configurado sem espaços para ativar a pasta bin\ correta
   buildConfiguration: 'Release'
-  
-  # CONFIGURAÇÃO DO AZURE: Substitua com os dados reais do seu portal do Azure
-  azureServiceConnection: 'SuaConexaoAzure'
-  azureWebAppName: 'seu-app-service-api'
 
 steps:
-# 1. Garante a instalação do NuGet no ambiente
+# 1. Garante a instalação do NuGet no ambiente do agente
 - task: NuGetToolInstaller@1
   displayName: 'Garantir Instalador do NuGet'
 
-# 2. Executa a restauração dos pacotes no local correto exigido pelo .csproj
+# 2. Executa a restauração dos pacotes (como MySql.Data e Swashbuckle)
 - powershell: |
     $csproj = Get-Item "$(projectPath)"
     $solutionDir = $csproj.Directory.Parent.FullName
     nuget restore "$($csproj.FullName)" -PackagesDirectory "$solutionDir\packages"
   displayName: 'Restaurar Pacotes NuGet via PowerShell'
 
-# 3. Compila a Web API gerando o pacote .zip oficial do Web Deploy
+# 3. Compila a Web API gerando uma pasta limpa com os arquivos finais
 - task: VSBuild@1
-  displayName: 'Compilar Web API para o Azure'
+  displayName: 'Compilar Web API (.NET Framework)'
   inputs:
     solution: '$(projectPath)'
     platform: '$(buildPlatform)'
     configuration: '$(buildConfiguration)'
-    # Altera os argumentos para empacotar tudo em um único arquivo .zip na raiz de staging
-    msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:PackageLocation="$(build.artifactStagingDirectory)\webapi.zip"'
+    # Extrai o site limpo (FileSystem) salvando na pasta temporária do agente
+    msbuildArgs: '/p:DeployOnBuild=true /p:DeployDefaultTarget=WebPublish /p:WebPublishMethod=FileSystem /p:publishUrl="$(build.artifactStagingDirectory)\SitePronto" /p:DeleteExistingFiles=True'
     clean: true
 
-# 4. Envia o pacote compactado diretamente para o seu Azure App Service
-- task: AzureRmWebAppDeployment@4
-  displayName: 'Deploy Automático no Azure App Service'
+# 4. Compacta a pasta gerada em um arquivo unificado drop.zip
+- task: ArchiveFiles@2
+  displayName: 'Compactar Arquivos em drop.zip'
   inputs:
-    ConnectionType: 'AzureRM'
-    azureSubscription: '$(azureServiceConnection)'
-    appType: 'webApp'
-    WebAppName: '$(azureWebAppName)'
-    package: '$(build.artifactStagingDirectory)\webapi.zip'
+    rootFolderOrFile: '$(build.artifactStagingDirectory)\SitePronto'
+    includeRootFolder: false
+    archiveType: 'zip'
+    archiveFile: '$(build.artifactStagingDirectory)\drop.zip'
+    replaceExistingArchive: true
+
+# 5. Publica o arquivo drop.zip para você poder baixá-lo na interface do Azure DevOps
+- task: PublishBuildArtifacts@1
+  displayName: 'Disponibilizar Download do drop.zip'
+  inputs:
+    PathtoPublish: '$(build.artifactStagingDirectory)\drop.zip'
+    ArtifactName: 'drop'
+    publishLocation: 'Container'
