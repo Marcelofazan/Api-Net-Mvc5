@@ -5,19 +5,18 @@ pool:
   vmImage: 'windows-latest'
 
 variables:
-  # Mantemos o foco absoluto no seu arquivo de projeto WebForms
+  # Caminho exato do novo projeto fornecido no arquivo xml
   projectPath: '**/SistemaERPOnlineAPI.csproj'
-  buildPlatform: 'Any CPU'
+  buildPlatform: 'AnyCPU' # Configurado sem espaços para ativar a tag <OutputPath>bin\</OutputPath> do seu csproj
   buildConfiguration: 'Release'
 
 steps:
-# 1. Garante a instalação do NuGet na versão estável do pool
+# 1. Garante a instalação do NuGet na versão estável do pool Windows
 - task: NuGetToolInstaller@1
   displayName: 'Garantir Instalador do NuGet'
 
-# 2. Executa a restauração explícita forçando a pasta 'packages' no nível correto exigido pelo .csproj
+# 2. Executa a restauração forçando a pasta 'packages' no nível correto exigido pelo novo .csproj
 - powershell: |
-    # Localiza o arquivo csproj dinamicamente no agente
     $csproj = Get-Item "$(projectPath)"
     $projectDir = $csproj.Directory.FullName
     $solutionDir = $csproj.Directory.Parent.FullName
@@ -25,24 +24,25 @@ steps:
     Write-Host "Diretório do projeto: $projectDir"
     Write-Host "Diretório da Solução (Raiz): $solutionDir"
     
-    # Executa o restore injetando a pasta 'packages' exatamente um nível acima do .csproj (..\packages)
+    # Restaura pacotes como MySql.Data 9.7.0 e Swashbuckle 5.6.0 mapeados no seu XML
     nuget restore "$($csproj.FullName)" -PackagesDirectory "$solutionDir\packages"
   displayName: 'Restaurar Pacotes NuGet via PowerShell'
 
-# 3. Compilação do projeto WebForms passando explicitamente a Plataforma e Configuração
+# 3. Compilação da Web API estruturada para o formato de arquivos aceito pelo Somee
 - task: VSBuild@1
-  displayName: 'Compilar Projeto WebForms / .NET Framework'
+  displayName: 'Compilar Web API / .NET Framework'
   inputs:
     solution: '$(projectPath)'
     platform: '$(buildPlatform)'
     configuration: '$(buildConfiguration)'
-    msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:PackageLocation="$(build.artifactStagingDirectory)"'
+    # Extrai o site limpo (FileSystem) salvando na pasta de artefatos
+    msbuildArgs: '/p:DeployOnBuild=true /p:DeployDefaultTarget=WebPublish /p:WebPublishMethod=Package /p:PackageAsSingleFile=false /p:publishUrl="$(build.artifactStagingDirectory)\ApiPronta" /p:DeleteExistingFiles=True'
     clean: true
 
-# 4. Publicação dos artefatos compactados prontos para o IIS
+# 4. Publicação da pasta gerada contendo a pasta bin/, web.config e arquivos globais
 - task: PublishBuildArtifacts@1
-  displayName: 'Publicar Artefato Gerado'
+  displayName: 'Disponibilizar Artefato para o Somee'
   inputs:
-    PathtoPublish: '$(build.artifactStagingDirectory)'
-    ArtifactName: 'drop-webforms'
+    PathtoPublish: '$(build.artifactStagingDirectory)\_PublishedWebsites\SistemaERPOnlineAPI'
+    ArtifactName: 'WebApiSomee'
     publishLocation: 'Container'
