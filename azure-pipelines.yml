@@ -5,44 +5,44 @@ pool:
   vmImage: 'windows-latest'
 
 variables:
-  # Caminho exato do novo projeto fornecido no arquivo xml
+  # Caminho exato do seu projeto da API
   projectPath: '**/SistemaERPOnlineAPI.csproj'
-  buildPlatform: 'AnyCPU' # Configurado sem espaços para ativar a tag <OutputPath>bin\</OutputPath> do seu csproj
+  buildPlatform: 'AnyCPU'
   buildConfiguration: 'Release'
+  
+  # CONFIGURAÇÃO DO AZURE: Substitua com os dados reais do seu portal do Azure
+  azureServiceConnection: 'SuaConexaoAzure'
+  azureWebAppName: 'seu-app-service-api'
 
 steps:
-# 1. Garante a instalação do NuGet na versão estável do pool Windows
+# 1. Garante a instalação do NuGet no ambiente
 - task: NuGetToolInstaller@1
   displayName: 'Garantir Instalador do NuGet'
 
-# 2. Executa a restauração forçando a pasta 'packages' no nível correto exigido pelo novo .csproj
+# 2. Executa a restauração dos pacotes no local correto exigido pelo .csproj
 - powershell: |
     $csproj = Get-Item "$(projectPath)"
-    $projectDir = $csproj.Directory.FullName
     $solutionDir = $csproj.Directory.Parent.FullName
-    
-    Write-Host "Diretório do projeto: $projectDir"
-    Write-Host "Diretório da Solução (Raiz): $solutionDir"
-    
-    # Restaura pacotes como MySql.Data 9.7.0 e Swashbuckle 5.6.0 mapeados no seu XML
     nuget restore "$($csproj.FullName)" -PackagesDirectory "$solutionDir\packages"
   displayName: 'Restaurar Pacotes NuGet via PowerShell'
 
-# 3. Compilação da Web API estruturada para o formato de arquivos aceito pelo Somee
+# 3. Compila a Web API gerando o pacote .zip oficial do Web Deploy
 - task: VSBuild@1
-  displayName: 'Compilar Web API / .NET Framework'
+  displayName: 'Compilar Web API para o Azure'
   inputs:
     solution: '$(projectPath)'
     platform: '$(buildPlatform)'
     configuration: '$(buildConfiguration)'
-    # Extrai o site limpo (FileSystem) salvando na pasta de artefatos
-    msbuildArgs: '/p:DeployOnBuild=true /p:DeployDefaultTarget=WebPublish /p:WebPublishMethod=Package /p:PackageAsSingleFile=false /p:publishUrl="$(build.artifactStagingDirectory)\ApiPronta" /p:DeleteExistingFiles=True'
+    # Altera os argumentos para empacotar tudo em um único arquivo .zip na raiz de staging
+    msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:PackageLocation="$(build.artifactStagingDirectory)\webapi.zip"'
     clean: true
 
-# 4. Publicação da pasta gerada contendo a pasta bin/, web.config e arquivos globais
-- task: PublishBuildArtifacts@1
-  displayName: 'Disponibilizar Artefato para o Somee'
+# 4. Envia o pacote compactado diretamente para o seu Azure App Service
+- task: AzureRmWebAppDeployment@4
+  displayName: 'Deploy Automático no Azure App Service'
   inputs:
-    PathtoPublish: '$(build.artifactStagingDirectory)\_PublishedWebsites\SistemaERPOnlineAPI'
-    ArtifactName: 'WebApiSomee'
-    publishLocation: 'Container'
+    ConnectionType: 'AzureRM'
+    azureSubscription: '$(azureServiceConnection)'
+    appType: 'webApp'
+    WebAppName: '$(azureWebAppName)'
+    package: '$(build.artifactStagingDirectory)\webapi.zip'
